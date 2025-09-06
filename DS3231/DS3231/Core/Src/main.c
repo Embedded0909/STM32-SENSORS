@@ -58,7 +58,66 @@ static void MX_I2C2_Init(void);
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
 
-Datetime dt;
+#define LCD_ADDR (0x27  << 1)
+#define LCD_BACKLIGHT 0x08
+#define ENABLE 0x04
+
+static void LCD_SendInternal(I2C_HandleTypeDef *hi2c, uint8_t data, uint8_t flags) {
+    HAL_StatusTypeDef res;
+    uint8_t up = data & 0xF0;
+    uint8_t lo = (data << 4) & 0xF0;
+    uint8_t data_arr[4];
+
+    data_arr[0] = up | flags | LCD_BACKLIGHT | ENABLE;
+    data_arr[1] = up | flags | LCD_BACKLIGHT;
+    data_arr[2] = lo | flags | LCD_BACKLIGHT | ENABLE;
+    data_arr[3] = lo | flags | LCD_BACKLIGHT;
+
+    res = HAL_I2C_Master_Transmit(hi2c, LCD_ADDR, data_arr, 4, HAL_MAX_DELAY);
+    HAL_Delay(1);
+}
+
+void LCD_SendCmd(I2C_HandleTypeDef *hi2c, char cmd) {
+    LCD_SendInternal(hi2c, cmd, 0);
+}
+
+void LCD_SendData(I2C_HandleTypeDef *hi2c, char data) {
+    LCD_SendInternal(hi2c, data, 1);
+}
+
+void LCD_Init(I2C_HandleTypeDef *hi2c) {
+    HAL_Delay(50); // ch? LCD ?n d?nh
+
+    LCD_SendCmd(hi2c, 0x30);
+    HAL_Delay(5);
+    LCD_SendCmd(hi2c, 0x30);
+    HAL_Delay(1);
+    LCD_SendCmd(hi2c, 0x30);
+    HAL_Delay(10);
+
+    LCD_SendCmd(hi2c, 0x20); // 4-bit mode
+
+    // c?u hình LCD
+    LCD_SendCmd(hi2c, 0x28); // 4-bit, 2 line, 5x8 font
+    LCD_SendCmd(hi2c, 0x08); // display off
+    LCD_SendCmd(hi2c, 0x01); // clear display
+    HAL_Delay(2);
+    LCD_SendCmd(hi2c, 0x06); // entry mode
+    LCD_SendCmd(hi2c, 0x0C); // display on, cursor off, blink off
+}
+
+void LCD_SendString(I2C_HandleTypeDef *hi2c, char *str) {
+    while (*str) {
+        LCD_SendData(hi2c, *str++);
+    }
+}
+
+void LCD_SetCursor(I2C_HandleTypeDef *hi2c, uint8_t row, uint8_t col) {
+    uint8_t addr = (row == 0) ? 0x80 : 0xC0;
+    addr += col;
+    LCD_SendCmd(hi2c, addr);
+}
+
 
 
 /* USER CODE END 0 */
@@ -94,19 +153,17 @@ int main(void)
   MX_GPIO_Init();
   MX_I2C2_Init();
   /* USER CODE BEGIN 2 */
-	RTC_Init(&dt);
-  /* USER CODE END 2 */
-	dt.hour = 10;
-	dt.min = 0;
-	dt.second = 0;
-	RTC_Write(&dt);
+	
+	LCD_Init(&hi2c2);
+  LCD_SetCursor(&hi2c2, 0, 0);
+  LCD_SendString(&hi2c2, "Hello");
+
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
     /* USER CODE END WHILE */
-		RTC_Read(&dt);
-		HAL_Delay(1000);
+
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
